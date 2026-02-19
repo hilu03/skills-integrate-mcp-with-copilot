@@ -3,6 +3,163 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  
+  // Authentication elements
+  const userIcon = document.getElementById("user-icon");
+  const userMenu = document.getElementById("user-menu");
+  const loginBtn = document.getElementById("login-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+  const loginModal = document.getElementById("login-modal");
+  const loginForm = document.getElementById("login-form");
+  const closeModalBtn = document.querySelector(".close");
+  const loginMessage = document.getElementById("login-message");
+  const loggedOutMenu = document.getElementById("logged-out-menu");
+  const loggedInMenu = document.getElementById("logged-in-menu");
+  const usernameDisplay = document.getElementById("username-display");
+
+  let isAuthenticated = false;
+  let currentUser = null;
+
+  // Check authentication status
+  async function checkAuthStatus() {
+    try {
+      const response = await fetch("/auth/status");
+      const result = await response.json();
+      
+      isAuthenticated = result.authenticated;
+      currentUser = result.username || null;
+      
+      updateUIForAuthState();
+    } catch (error) {
+      console.error("Error checking auth status:", error);
+      isAuthenticated = false;
+      currentUser = null;
+      updateUIForAuthState();
+    }
+  }
+
+  // Update UI based on authentication state
+  function updateUIForAuthState() {
+    if (isAuthenticated) {
+      loggedOutMenu.classList.add("hidden");
+      loggedInMenu.classList.remove("hidden");
+      usernameDisplay.textContent = `Logged in as: ${currentUser}`;
+      userIcon.style.color = "#4CAF50";
+    } else {
+      loggedOutMenu.classList.remove("hidden");
+      loggedInMenu.classList.add("hidden");
+      userIcon.style.color = "";
+    }
+  }
+
+  // Toggle user menu
+  userIcon.addEventListener("click", (e) => {
+    e.stopPropagation();
+    userMenu.classList.toggle("hidden");
+  });
+
+  // Close user menu when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!userMenu.contains(e.target) && e.target !== userIcon) {
+      userMenu.classList.add("hidden");
+    }
+  });
+
+  // Show login modal
+  loginBtn.addEventListener("click", () => {
+    loginModal.classList.remove("hidden");
+    userMenu.classList.add("hidden");
+  });
+
+  // Close login modal
+  closeModalBtn.addEventListener("click", () => {
+    loginModal.classList.add("hidden");
+    loginForm.reset();
+    loginMessage.classList.add("hidden");
+  });
+
+  // Close modal when clicking outside
+  window.addEventListener("click", (e) => {
+    if (e.target === loginModal) {
+      loginModal.classList.add("hidden");
+      loginForm.reset();
+      loginMessage.classList.add("hidden");
+    }
+  });
+
+  // Handle login form submission
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+
+    try {
+      const response = await fetch(
+        `/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+        {
+          method: "POST",
+          credentials: "include"
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        loginMessage.textContent = result.message;
+        loginMessage.className = "success";
+        loginMessage.classList.remove("hidden");
+        
+        // Update auth state
+        isAuthenticated = true;
+        currentUser = result.username;
+        updateUIForAuthState();
+
+        // Close modal after short delay
+        setTimeout(() => {
+          loginModal.classList.add("hidden");
+          loginForm.reset();
+          loginMessage.classList.add("hidden");
+        }, 1500);
+      } else {
+        loginMessage.textContent = result.detail || "Login failed";
+        loginMessage.className = "error";
+        loginMessage.classList.remove("hidden");
+      }
+    } catch (error) {
+      loginMessage.textContent = "Failed to login. Please try again.";
+      loginMessage.className = "error";
+      loginMessage.classList.remove("hidden");
+      console.error("Error logging in:", error);
+    }
+  });
+
+  // Handle logout
+  logoutBtn.addEventListener("click", async () => {
+    try {
+      const response = await fetch("/logout", {
+        method: "POST",
+        credentials: "include"
+      });
+
+      if (response.ok) {
+        isAuthenticated = false;
+        currentUser = null;
+        updateUIForAuthState();
+        userMenu.classList.add("hidden");
+        
+        messageDiv.textContent = "Logged out successfully";
+        messageDiv.className = "info";
+        messageDiv.classList.remove("hidden");
+        
+        setTimeout(() => {
+          messageDiv.classList.add("hidden");
+        }, 3000);
+      }
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  });
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -73,6 +230,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const activity = button.getAttribute("data-activity");
     const email = button.getAttribute("data-email");
 
+    // Check authentication first
+    if (!isAuthenticated) {
+      messageDiv.textContent = "You must be logged in as a teacher to unregister students.";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+      
+      setTimeout(() => {
+        messageDiv.classList.add("hidden");
+      }, 5000);
+      return;
+    }
+
     try {
       const response = await fetch(
         `/activities/${encodeURIComponent(
@@ -80,6 +249,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          credentials: "include"
         }
       );
 
@@ -114,6 +284,18 @@ document.addEventListener("DOMContentLoaded", () => {
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    // Check authentication first
+    if (!isAuthenticated) {
+      messageDiv.textContent = "You must be logged in as a teacher to register students.";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+      
+      setTimeout(() => {
+        messageDiv.classList.add("hidden");
+      }, 5000);
+      return;
+    }
+
     const email = document.getElementById("email").value;
     const activity = document.getElementById("activity").value;
 
@@ -124,6 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/signup?email=${encodeURIComponent(email)}`,
         {
           method: "POST",
+          credentials: "include"
         }
       );
 
@@ -156,5 +339,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initialize app
+  checkAuthStatus();
   fetchActivities();
 });
